@@ -1,0 +1,10 @@
+description "Library for creating discord bots\377";
+
+uses
+	Core/SSL,
+	Core;
+
+file
+	Discord.h,
+	Discord.cpp;
+
