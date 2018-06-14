@@ -68,7 +68,12 @@ class BombsBot {
     }
     
 public:
-    String GameInfo { "Bombs\nCommands: \n\tNew game: new\n\tUncover square: *u <x> <y>*\n\tMark square: *m <x> <y>*" };
+    String GameInfo {
+        "Bombs\nCommands: \n\t"
+        "New game: new\n\t"
+        "Uncover square: *u <x> <y>*\n\t"
+        "Mark square: *m <x> <y>*"
+    };
     
     String GetStatus() {
         if(finished)
