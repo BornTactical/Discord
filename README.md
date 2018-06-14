@@ -2,7 +2,7 @@
 A simple discord library for creating C++ bots under Ultimate++ (https://www.ultimatepp.org/)
 
 # Dependencies
-* Ultimate++ (https://www.ultimatepp.org)
+* [Ultimate++](https://www.ultimatepp.org)
 * No further dependencies are required
 
 # Usage
