@@ -1,5 +1,5 @@
 # DiscordUpp
-A simple discord library for creating C++ bots under Ultimate++ (https://www.ultimatepp.org/)
+A simple discord library for creating C++ bots using Ultimate++
 
 # Dependencies
 * [Ultimate++](https://www.ultimatepp.org)
