@@ -31,7 +31,7 @@ CONSOLE_APP_MAIN {
 ```
 # A Minesweeper Bot 
 
-This is a bot adapted from the Bombs (a Minesweeper clone) [example code](https://www.ultimatepp.org/examples$Bombs$en-us.html) on the Ultimate++ website. The build will require CtrlLib and the png plugin to operate since it renders to an image which is then posted into the channel.
+This is a bot adapted from the Bombs (a Minesweeper clone) [example code](https://www.ultimatepp.org/examples$Bombs$en-us.html) on the Ultimate++ website. The build will require CtrlLib and the png plugin to operate since it renders to an image which is then posted into the channel, so make sure you add those packages to your project.
 
 ```cpp
 #include <Discord/Discord.h>
