@@ -220,9 +220,7 @@ void Discord::SendFile(String channel, String message, String title, String file
         ("embed",
         Json("title", title)
             ("image",
-            Json("url", "attachment://" + fileName)
-                ("width",  320)
-                ("height", 200)));
+            Json("url", "attachment://" + fileName)));
                 
     req.ClearPost();
     req.ClearContent();
