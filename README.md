@@ -210,23 +210,19 @@ public:
                 
                 if(command == "new") {
                     Reset();
-                    
-                    bot.SendFile(channel, GameInfo, GetStatus(), "temp.png");
                 }
                 else if(command == "m") {
                     int x = parser.ReadInt();
                     int y = parser.ReadInt();
                     Mark(y, x);
-                    
-                    bot.SendFile(channel, GameInfo, GetStatus(), "temp.png");
                 }
                 else if(command == "u") {
                     int x = parser.ReadInt();
                     int y = parser.ReadInt();
                     Uncover(y, x);
-                    
-                    bot.SendFile(channel, GameInfo, GetStatus(), "temp.png");
                 }
+                
+                bot.SendFile(channel, GameInfo, GetStatus(), "temp.png");
             }
             catch(CParser::Error exception) {
                 bot.CreateMessage(channel, "Error: unknown command!");
