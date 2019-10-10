@@ -16,7 +16,7 @@ namespace Upp {
         auto TimeDiff = waitSeconds - serverSeconds;
         
         if(Remaining == 0) {
-            Thread::Sleep(TimeDiff * 1000);
+            Thread::Sleep((int)(TimeDiff * 1000));
         }
     }
     
@@ -41,19 +41,15 @@ namespace Upp {
         gatewayAddr.Replace("wss://", "https://");
     }
     
-    void Discord::RepeatSendHeartbeat(unsigned int ms, std::atomic<bool>& keepRunning) {
-        // This will execute on a different thread
-        while(keepRunning) {
-            Thread::Sleep(ms);
-            LOG("Sending heartbeat");
-            Json ack;
-    
-            ack("op", int(OP::HEARTBEAT))
-               ("d",  lastSequenceNum);
-            
-            LOG(ack);
-            ws.SendTextMasked(ack);
-        }
+    void Discord::SendHeartbeat() {
+        //LOG("Sending heartbeat");
+        Json ack;
+        
+        ack("op", int(OP::HEARTBEAT))
+           ("d",  lastSequenceNum);
+        
+        //LOG(ack);
+        ws.SendTextMasked(ack);
     }
     
     void Discord::Identify() {
@@ -70,13 +66,13 @@ namespace Upp {
                   //("shard", JsonArray() << 0 << 1)
                   ("presence",
                   Json("game",
-                       Json("name", "N/A")
+                       Json("name", "D-TOX")
                            ("type", 0))
                            ("status", "online")
                            ("since", int(Null))
                            ("afk", false))
         );
-        LOG(json);
+        //LOG(json);
         ws.SendTextMasked(json);
     }
     
@@ -87,76 +83,167 @@ namespace Upp {
     }
     
     void Discord::Hello(ValueMap payload) {
-        heartbeatInterval = payload["d"]["heartbeat_interval"];
+        heartbeatInterval = (dword)(int)payload["d"]["heartbeat_interval"];
         sessionID         = payload["d"]["session_id"];
-        
-        Thread().Run(THISBACK2(RepeatSendHeartbeat, heartbeatInterval, std::ref(keepRunning)));
         Identify();
     }
     
-    void Discord::Dispatch(ValueMap payload) {
+    void Discord::Dispatch(ValueMap&& payload) {
         String dispatchEvent = payload["t"];
         lastSequenceNum      = payload["s"];
             
         if(dispatchEvent == "READY")
-            WhenReady(payload);
+            WhenReady(pick(payload));
         else if(dispatchEvent == "ERROR")
-            WhenError(payload);
+            WhenError(pick(payload));
         else if(dispatchEvent == "GUILD_STATUS")
-            WhenGuildStatusChanged(payload);
+            WhenGuildStatusChanged(pick(payload));
         else if(dispatchEvent == "GUILD_CREATE")
-            WhenGuildCreated(payload);
+            WhenGuildCreated(pick(payload));
         else if(dispatchEvent == "CHANNEL_CREATE")
-            WhenChannelCreated(payload);
+            WhenChannelCreated(pick(payload));
         else if(dispatchEvent == "VOICE_CHANNEL_SELECT")
-            WhenVoiceChannelSelected(payload);
+            WhenVoiceChannelSelected(pick(payload));
         else if(dispatchEvent == "VOICE_STATE_UPDATE")
-            WhenVoiceStateUpdated(payload);
+            WhenVoiceStateUpdated(pick(payload));
         else if(dispatchEvent == "VOICE_STATE_DELETE")
-            WhenVoiceStateDeleted(payload);
+            WhenVoiceStateDeleted(pick(payload));
         else if(dispatchEvent == "VOICE_SETTINGS_UPDATE")
-            WhenVoiceSettingsUpdated(payload);
+            WhenVoiceSettingsUpdated(pick(payload));
         else if(dispatchEvent == "VOICE_CONNECTION_STATUS")
-            WhenVoiceConnectionStatusChanged(payload);
+            WhenVoiceConnectionStatusChanged(pick(payload));
         else if(dispatchEvent == "SPEAKING_START")
-            WhenSpeakingStarted(payload);
+            WhenSpeakingStarted(pick(payload));
         else if(dispatchEvent == "SPEAKING_STOP")
-            WhenSpeakingStopped(payload);
+            WhenSpeakingStopped(pick(payload));
         else if(dispatchEvent == "MESSAGE_CREATE")
-            WhenMessageCreated(payload);
+            WhenMessageCreated(pick(payload));
         else if(dispatchEvent == "MESSAGE_UPDATE")
-            WhenMessageUpdated(payload);
+            WhenMessageUpdated(pick(payload));
         else if(dispatchEvent == "MESSAGE_DELETE")
-            WhenMessageDeleted(payload);
+            WhenMessageDeleted(pick(payload));
         else if(dispatchEvent == "NOTIFICATION_CREATE")
-            WhenNotificationCreated(payload);
+            WhenNotificationCreated(pick(payload));
         else if(dispatchEvent == "CAPTURE_SHORTCUT_CHANGE")
-            WhenCaptureShortcutChanged(payload);
+            WhenCaptureShortcutChanged(pick(payload));
         else if(dispatchEvent == "ACTIVITY_JOIN")
-            WhenActivityJoined(payload);
+            WhenActivityJoined(pick(payload));
         else if(dispatchEvent == "ACTIVITY_SPECTATE")
-            WhenActivitySpectated(payload);
+            WhenActivitySpectated(pick(payload));
         else if(dispatchEvent == "ACTIVITY_JOIN_REQUEST")
-            WhenActivityJoinRequested(payload);
+            WhenActivityJoinRequested(pick(payload));
+        else if(dispatchEvent == "PRESENCES_REPLACE")
+            WhenPresencesReplaced(pick(payload));
+        else if(dispatchEvent == "SESSIONS_REPLACE")
+            WhenSessionsReplaced(pick(payload));
+        else if(dispatchEvent == "PRESENCE_UPDATE")
+            WhenPresenceUpdated(pick(payload));
+        else if(dispatchEvent == "USER_SETTINGS_UPDATE")
+            WhenUserSettingsUpdated(pick(payload));
     }
     
     void Discord::InvalidSession(ValueMap payload) {
         bool resumable = payload["d"];
         if(!resumable) {
-            LOG("Invalid session, gateway unable to resume!");
+            //LOG("Invalid session, gateway unable to resume!");
             Exit();
         }
     }
     
-    int Discord::GetMessages(String channel, int limit, JsonArray& messageIDs) {
+    void Discord::GetGuildMembers(String guildId, int max, int after, ValueArray& payload) {
+        String response =
+            req.Url(baseUrl)
+            .Path("/api/guilds/" + guildId + "/members?limit=" + AsString(max))
+            .GET()
+            .Execute();
+            
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    void Discord::GetCurrentUser(ValueMap& payload) {
+        String response =
+            req.Url(baseUrl)
+            .Path("/api/users/@me")
+            .GET()
+            .Execute();
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    void Discord::GetChannel(String channel, ValueMap& payload) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel)
+               .GET()
+               .Execute();
+        
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    void Discord::GetChannelMessage(String channel, String messageId, ValueMap& payload) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel + "/messages/" + messageId)
+               .GET()
+               .Execute();
+        
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    void Discord::GetMessages(String channel, int limit, ValueArray& payload) {
         String response =
             req.Url(baseUrl)
                .Path("/api/channels/" + channel + "/messages?limit=" + AsString(limit))
                .GET()
                .Execute();
-               
-        LOG(response);
     
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    void Discord::GetMessagesAfter(String channel, String messageId, int limit, ValueArray& payload) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel + "/messages?after=" + messageId + "?limit=" + AsString(limit))
+               .GET()
+               .Execute();
+    
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+
+    void Discord::GetMessagesBefore(String channel, String messageId, int limit, ValueArray& payload) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel + "/messages?before=" + messageId + "?limit=" + AsString(limit))
+               .GET()
+               .Execute();
+    
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+
+    void Discord::GetMessagesAround(String channel, String messageId, int limit, ValueArray& payload) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel + "/messages?around=" + messageId + "?limit=" + AsString(limit))
+               .GET()
+               .Execute();
+    
+        payload = ParseJSON(response);
+        ApplyRateLimits(req);
+    }
+    
+    int Discord::GetMessageIds(String channel, int limit, JsonArray& messageIDs) {
+        String response =
+            req.Url(baseUrl)
+               .Path("/api/channels/" + channel + "/messages?limit=" + AsString(limit))
+               .GET()
+               .Execute();
+             
         ValueArray messages = ParseJSON(response);
         ApplyRateLimits(req);
         
@@ -176,7 +263,7 @@ namespace Upp {
         
         do {
             JsonArray messageIDs;
-            numDeleted = GetMessages(channel, numToDelete > 100 ? 100 : numToDelete, messageIDs);
+            numDeleted = GetMessageIds(channel, numToDelete > 100 ? 100 : numToDelete, messageIDs);
             
             Json json("messages", messageIDs);
             numToDelete -= 100;
@@ -193,7 +280,6 @@ namespace Upp {
         while(numDeleted == 100);
     }
     
-    
     void Discord::CreateMessage(String channel, String message) {
         req.New();
         Json json("content", message);
@@ -204,11 +290,18 @@ namespace Upp {
                .POST()
                .Post(json)
                .Execute();
-        
-        LOG(response);
+      
         ValueMap m = ParseJSON(response);
         ApplyRateLimits(req);
-        LOG(req.GetContent());
+    }
+    
+    void Discord::NotifyStartTyping(String channel) {
+        req.New();
+        req.Url(baseUrl)
+           .Path("/api/channels/" + channel + "/typing")
+           .POST()
+           .Execute();
+        ApplyRateLimits(req);
     }
     
     void Discord::SendFile(String channel, String message, String title, String fileName) {
@@ -235,7 +328,6 @@ namespace Upp {
                .POST()
                .Execute();
                
-        LOG(response);
         ValueMap m = ParseJSON(response);
         ApplyRateLimits(req);
         
@@ -244,30 +336,34 @@ namespace Upp {
         req.ContentType("application/json");
     }
     
-    
-    void Discord::Listen() {
-        ws.Connect(gatewayAddr, "gateway.discord.gg", true, 443);
-            
-        // A reconnect event was received, so resuming the session to play back
-        // whatever events were sent when the client was down
-        if(shouldResume) {
-            Resume();
-            shouldResume = false;
-        }
-            
+    void Discord::EventLoop() {
+        auto now = GetTickCount();
+        dword last = 0;
+        
         // Event loop
-        for(;;) {
+        while(!done) {
+            now = GetTickCount();
             BeforeSocketReceive();
             String response = ws.Receive();
             
             if(ws.IsError()) {
-                LOG(ws.GetError());
+                //LOG(ws.GetError());
                 return;
             }
             else if(ws.IsClosed()) {
-                LOG("Socket closed unexpectedly");
-                LOG(ws.GetError());
+                //LOG("Socket closed unexpectedly");
+                //LOG(ws.GetError());
                 return;
+            }
+            
+            if(response.IsEmpty()) {
+                if((now - last) > heartbeatInterval) {
+                    last = now;
+                    SendHeartbeat();
+                }
+                
+                Thread::Sleep(100);
+                continue;
             }
             
             ValueMap payload = ParseJSON(response);
@@ -275,7 +371,7 @@ namespace Upp {
             
             switch(op) {
                 case OP::DISPATCH:
-                    Dispatch(payload);
+                    Dispatch(pick(payload));
                     break;
                 case OP::HEARTBEAT:
                     break;
@@ -297,6 +393,102 @@ namespace Upp {
         }
     }
     
+    void Discord::ListenDetach() {
+        eventThread.Run([this]{Listen();});
+    }
+    
+    void Discord::Listen() {
+        ws.NonBlocking(false);
+        ws.Connect(gatewayAddr, "gateway.discord.gg", true, 443);
+        ws.NonBlocking();
+        
+        // A reconnect event was received, so resuming the session to play back
+        // whatever events were sent when the client was down
+        if(shouldResume) {
+            Resume();
+            shouldResume = false;
+        }
+        
+        EventLoop();
+    }
+    
+    Discord::Discord() {
+    }
+    
+    bool Discord::LoginAsUser(String userAgent, String userToken) {
+        if(userToken.IsEmpty()) {
+            return false;
+        }
+        
+        token = userToken;
+        
+        req.ClearContent();
+        req.Clear();
+        req.New();
+        req.New();
+        
+        req.Header("User-Agent", userAgent)
+           .Header("Authorization", token)
+           .ContentType("application/json");
+        
+        ws.Header("User-Agent", userAgent)
+          .Header("Authorization", token)
+          .Header("ContentType", "application/json");
+        
+        ObtainGatewayAddress();
+        
+        return true;
+    }
+    
+    bool Discord::LoginAsUser(String userAgent, String uname, String password) {
+        req.New();
+        req.ContentType("application/json");
+        Json json;
+        json("email", uname)
+            ("password", password);
+        String response = req.Url(baseUrl + "/api/auth/login")
+                             .Post(json)
+                             .Execute();
+                             
+        Value payload = ParseJSON(response);
+        token = payload["token"];
+        
+        if(token.IsEmpty()) {
+            return false;
+        }
+        
+        req.ClearContent();
+        req.Clear();
+        req.New();
+        
+        req.Header("User-Agent", userAgent)
+           .Header("Authorization", token)
+           .ContentType("application/json");
+        
+        ws.Header("User-Agent", userAgent)
+          .Header("Authorization", token)
+          .Header("ContentType", "application/json");
+        
+        ObtainGatewayAddress();
+        
+        return true;
+    }
+    
+    void Discord::LoginAsBot(String name, String token) {
+        this->token = token;
+        this->name  = name;
+        
+        req.Header("User-Agent", name)
+           .Header("Authorization", "Bot " + token)
+           .ContentType("application/json");
+           
+        ws.Header("User-Agent", name)
+          .Header("Authorization", "Bot " + token)
+          .Header("ContentType", "application/json");
+          
+        ObtainGatewayAddress();
+    }
+    
     Discord::Discord(String configFile) {
         auto file = ParseJSON(LoadFile(configFile));
         name  = file["bot"]["name"];
@@ -304,7 +496,6 @@ namespace Upp {
         
         Discord(name, token);
     }
-    
     
     Discord::Discord(String name, String token) : token(token), name(name) {
         req.Header("User-Agent", name)
@@ -319,7 +510,9 @@ namespace Upp {
     }
     
     Discord::~Discord() {
-        keepRunning = false;
+        done = true;
+        eventThread.Wait();
+        
         ws.Close("Closing websocket");
         req.Close();
     }
